@@ -22,22 +22,10 @@ app.use(express.static(path.join(__dirname, "public")));
 // which is required before sending it to Vercel Blob.
 const upload = multer({ storage: multer.memoryStorage() });
 
-// REMOVE: The disk storage setup is no longer needed:
-/*
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/"); // save in uploads folder
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname); // unique name
-  },
-});
-*/
+// REMOVED: The commented-out disk storage setup (was removed in previous steps)
 
-// REMOVE: The static route for local uploads is no longer needed:
-// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-// The files will be accessed via a public Vercel Blob URL.
-
+// REMOVED: The commented-out static route for local uploads has been removed.
+// The files are now accessed via a public Vercel Blob URL, not the local file system.
 
 // Dummy data (Initial posts will now need to have Vercel Blob URLs for images)
 let posts = [
@@ -72,7 +60,6 @@ let posts = [
 ];
 
 // ------------------- LOGIN PART ------------------- //
-// ... (Login part remains unchanged)
 const USERNAME = "admin";
 const PASSWORD = "12345";
 
@@ -105,7 +92,7 @@ app.get("/posts/new", (req, res) => {
   res.render("new.ejs");
 });
 
-// 3. UPDATE POST ROUTE TO UPLOAD TO VERCEL BLOB
+// 3. POST ROUTE TO UPLOAD TO VERCEL BLOB
 app.post("/posts", upload.single("image"), async (req, res) => {
   let { username, content, rating } = req.body;
   let id = uuidv4();
@@ -115,17 +102,15 @@ app.post("/posts", upload.single("image"), async (req, res) => {
     // 4. UPLOAD LOGIC
     try {
       // Use put() to upload the file buffer to Vercel Blob
-      // The path will be unique: 'posts/<UUID>-<original-filename>'
       const blob = await put(`posts/${uuidv4()}-${req.file.originalname}`, req.file.buffer, {
         access: 'public', // Make the file publicly accessible via URL
         contentType: req.file.mimetype,
       });
-      // The returned 'blob' object contains the URL
+      // The returned 'blob' object contains the full Vercel Blob URL
       imageUrl = blob.url;
     } catch (error) {
       console.error("Vercel Blob Upload Error:", error);
-      // Decide how to handle the error (e.g., continue without image or send an error response)
-      // For now, we'll log and proceed with imageUrl = null
+      // Log error but proceed without an image URL if the upload failed
     }
   }
 
@@ -151,8 +136,6 @@ app.get("/posts/:id", (req, res) => {
   res.render("singlepost.ejs", { post });
 });
 
-// ... (Edit and Delete routes remain unchanged, though you may want to delete the blob in a real app)
-
 app.get("/posts/:id/edit", (req, res) => {
   let { id } = req.params;
   let post = posts.find((p) => id === p.id);
@@ -175,17 +158,14 @@ app.patch("/posts/:id", (req, res) => {
 
 app.delete("/posts/:id", (req, res) => {
   let { id } = req.params;
-  // In a production app, you would also call Vercel Blob SDK's `del` function here
-  // to remove the file from storage: 
-  // const postToDelete = posts.find((p) => p.id === id);
-  // if (postToDelete && postToDelete.image) { await del(postToDelete.image); }
+  // NOTE: In a production app, you would add logic here to call del(post.image) 
+  // from @vercel/blob to clean up the storage.
   
   posts = posts.filter((p) => p.id !== id);
   res.redirect("/posts");
 });
 
 // ------------------- ANALYTICS PART ------------------- //
-// ... (Analytics part remains unchanged)
 app.get("/ana", (req, res) => {
   let today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -212,6 +192,12 @@ app.get("/ana", (req, res) => {
       : 0;
 
   res.render("ana.ejs", { todaysPosts, ratingCounts, averageRating });
+});
+
+
+// CATCH-ALL ROUTE: Add a custom 404 handler here to catch any unhandled route
+app.use((req, res) => {
+    res.status(404).send("Error 404: The requested resource was not found.");
 });
 
 app.listen(port, () => {
