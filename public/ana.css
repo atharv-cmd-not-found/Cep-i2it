@@ -1,0 +1,72 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #1a0000; /* deep dark red background */
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  color: #f8d7da; /* light pinkish text */
+}
+
+.dashboard {
+  background: #2b0000; /* dark red card background */
+  margin-top: 40px;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+  max-width: 600px;
+  width: 90%;
+}
+
+h1 {
+  text-align: center;
+  color: #ff4d4d; /* bright red */
+  margin-bottom: 20px;
+}
+
+h2, h3 {
+  margin: 10px 0;
+  color: #ff9999; /* softer red/pink */
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 15px;
+}
+
+li {
+  background: #400000; /* deep maroon list item */
+  margin: 8px 0;
+  padding: 10px 15px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 16px;
+  color: #ffe6e6; /* light text */
+  box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+}
+
+.back-btn {
+  display: inline-block;
+  margin-top: 20px;
+  padding: 10px 16px;
+  background: #b30000; /* dark red button */
+  color: white;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: bold;
+  transition: background 0.3s;
+}
+
+.back-btn:hover {
+  background: #ff1a1a; /* brighter red hover */
+}
+
+.average {
+  font-size: 20px;
+  font-weight: bold;
+  color: #ff6666; /* standout pink-red */
+}

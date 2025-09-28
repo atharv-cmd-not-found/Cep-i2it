@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Analytics</title>
+  <link rel="stylesheet" href="/ana.css">
+</head>
+<body>
+  <div class="dashboard">
+    <h1>📊 Daily Analytics</h1>
+
+    <div class="stats">
+      <h2>Today's Reviews</h2>
+      <p class="number"><%= todaysPosts.length %></p>
+    </div>
+
+    <div class="stats">
+      <h2>Average Rating</h2>
+      <p class="average"><%= averageRating %> ⭐</p>
+    </div>
+
+    <div class="stats">
+      <h2>Ratings Breakdown</h2>
+      <ul class="breakdown">
+        <li>⭐ 1 star <span><%= ratingCounts[1] %></span></li>
+        <li>⭐⭐ 2 stars <span><%= ratingCounts[2] %></span></li>
+        <li>⭐⭐⭐ 3 stars <span><%= ratingCounts[3] %></span></li>
+        <li>⭐⭐⭐⭐ 4 stars <span><%= ratingCounts[4] %></span></li>
+        <li>⭐⭐⭐⭐⭐ 5 stars <span><%= ratingCounts[5] %></span></li>
+      </ul>
+    </div>
+
+    <a href="/posts" class="back-btn">⬅ Back to Posts</a>
+  </div>
+</body>
+</html>

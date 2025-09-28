@@ -1,0 +1,94 @@
+/* Background */
+body {
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+  background: linear-gradient(135deg, #2c0a0a, #4b0d0d);
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+/* Login container */
+.login-container {
+  background: #1a0000;
+  padding: 40px;
+  border-radius: 15px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+  width: 320px;
+  text-align: center;
+  animation: fadeIn 1s ease-in-out;
+}
+
+/* Headings */
+.login-container h1 {
+  font-size: 1.8rem;
+  color: #ff4d4d;
+  margin-bottom: 5px;
+}
+
+.login-container h2 {
+  margin: 10px 0 20px;
+  font-weight: 400;
+  color: #f2b6b6;
+}
+
+/* Error */
+.error {
+  color: #ff6666;
+  margin-bottom: 15px;
+  font-size: 0.9rem;
+}
+
+/* Labels */
+form label {
+  display: block;
+  text-align: left;
+  margin: 10px 0 5px;
+  font-size: 0.9rem;
+  color: #f2f2f2;
+}
+
+/* Inputs */
+form input {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  background: #330000;
+  color: #fff;
+  outline: none;
+  transition: 0.3s;
+}
+
+form input:focus {
+  background: #4d0000;
+  box-shadow: 0 0 5px #ff4d4d;
+}
+
+/* Button */
+form button {
+  width: 100%;
+  padding: 12px;
+  background: #ff3333;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: bold;
+  color: #fff;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+form button:hover {
+  background: #cc0000;
+  transform: translateY(-2px);
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}

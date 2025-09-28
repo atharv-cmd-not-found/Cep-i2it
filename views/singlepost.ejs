@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Post in detail</title>
+  <link rel="stylesheet" href="/singlepost.css">
+</head>
+<body>
+  <div class="post-detail">
+    <h1>Post in Detail</h1>
+
+    <p class="id">Post ID: <%= post.id %></p>
+    <h2 class="username">@<%= post.username %></h2>
+    <p class="content"><%= post.content %></p>
+
+    <% if (post.image) { %>
+      <img src="/uploads/<%= post.image %>" alt="Post Image" class="post-image">
+    <% } %>
+
+    <% if (post.rating) { %>
+      <div class="stars">
+        <% for(let i=1; i<=5; i++){ %>
+          <% if(i <= post.rating){ %>
+            ★
+          <% } else { %>
+            ☆
+          <% } %>
+        <% } %>
+      </div>
+    <% } %>
+
+    <!-- Timestamps -->
+    <div class="timestamps">
+      <p>Posted on: <%= post.createdAt.toLocaleString() %></p>
+      <% if (post.updatedAt && post.updatedAt.getTime() !== post.createdAt.getTime()) { %>
+        <p>Last updated: <%= post.updatedAt.toLocaleString() %></p>
+      <% } %>
+    </div>
+
+    <a href="/posts" class="back-btn">⬅ Back to Posts</a>
+  </div>
+</body>
+</html>
