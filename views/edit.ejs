@@ -12,12 +12,25 @@
 
     <form method="POST" action="/posts/<%= post.id %>?_method=PATCH">
       
+      <!-- NEW: Item Name Input Field -->
+      <label for="itemName">Item Name:</label>
+      <input 
+        type="text" 
+        name="itemName" 
+        id="itemName" 
+        value="<%= post.itemName %>" 
+        placeholder="e.g., Veg Biryani, Coffee" 
+        required
+      />
+      
+      <!-- Existing Content Textarea -->
       <textarea name="content"><%= post.content %></textarea>
       
+      <!-- FIX: Add Rating Input (Star Radio Buttons) -->
       <div class="rating-edit">
         <p>Current Rating: <%= post.rating %></p>
         <div class="stars-input">
-          <% for(let i=1; i<=5; i++){ %>
+          <% for(let i=5; i>=1; i--){ %>
             <input 
               type="radio" 
               id="star-<%= i %>" 
@@ -30,6 +43,8 @@
           <% } %>
         </div>
       </div>
+      <!-- END FIX -->
+
       <div class="form-actions">
         <button type="submit"> Save Changes</button>
         <a href="/posts/<%= post.id %>" class="cancel-btn">✖ Cancel</a>
