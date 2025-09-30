@@ -145,6 +145,6 @@ button[type="submit"]:hover {
 ========================== */
 input::placeholder,
 textarea::placeholder {
-    color: #ff9999;
+    color: #eeeeee;
     opacity: 0.8;
 }
