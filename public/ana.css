@@ -26,11 +26,14 @@ h1 {
   margin-bottom: 20px;
 }
 
-h2, h3 {
+h2{
   margin: 10px 0;
   color: #ff9999; /* softer red/pink */
 }
-
+h3 {
+  margin: 10px 0;
+  color: #ff6666; /* softer red/pink */
+}
 ul {
   list-style: none;
   padding: 0;
