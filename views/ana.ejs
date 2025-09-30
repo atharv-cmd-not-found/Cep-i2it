@@ -24,10 +24,10 @@
     <div class="stats best-item">
       <h2>Highest Rated Item (All Time)</h2>
       <% if (bestItem.avg > 0) { %>
-        <p class="item-name"><%= bestItem.name %></p>
-        <p class="rating-info">
+        <p class="item-name"><h3><%= bestItem.name %></h3></p>
+        <p class="rating-info"><h3>
             <%= bestItem.avg.toFixed(2) %> ⭐
-            <span class="review-count">(<%= bestItem.count %> Reviews)</span>
+            <span class="review-count">(<%= bestItem.count %> Reviews)</span></h3>
         </p>
       <% } else { %>
         <p class="item-name">No Rated Items Yet</p>
