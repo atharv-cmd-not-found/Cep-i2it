@@ -17,7 +17,7 @@
       <div class="rating-edit">
         <p>Current Rating: <%= post.rating %></p>
         <div class="stars-input">
-          <% for(let i=5; i>=1; i--){ %>
+          <% for(let i=1; i<=5; i++){ %>
             <input 
               type="radio" 
               id="star-<%= i %>" 
