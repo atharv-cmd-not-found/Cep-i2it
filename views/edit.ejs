@@ -11,8 +11,25 @@
     <h1>Edit Post</h1>
 
     <form method="POST" action="/posts/<%= post.id %>?_method=PATCH">
+      
       <textarea name="content"><%= post.content %></textarea>
       
+      <div class="rating-edit">
+        <p>Current Rating: <%= post.rating %></p>
+        <div class="stars-input">
+          <% for(let i=5; i>=1; i--){ %>
+            <input 
+              type="radio" 
+              id="star-<%= i %>" 
+              name="rating" 
+              value="<%= i %>" 
+              <%= (post.rating == i) ? 'checked' : '' %> 
+              required
+            />
+            <label for="star-<%= i %>">★</label>
+          <% } %>
+        </div>
+      </div>
       <div class="form-actions">
         <button type="submit"> Save Changes</button>
         <a href="/posts/<%= post.id %>" class="cancel-btn">✖ Cancel</a>
