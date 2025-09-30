@@ -10,7 +10,11 @@
   <form method="POST" action="/posts" enctype="multipart/form-data">
     <!-- Username -->
     <label class="file-label">Enter your name:
-      <input placeholder="Enter your name" name="username" required />
+      <input type="text"
+      placeholder="Enter your name" 
+      name="username"
+      accept="text/*"
+       required />
     </label>
     <!-- NEW: Item Name -->
     <label class="file-label">Name of item:
@@ -22,8 +26,9 @@
     </label>
 
     <!-- Food Item Content -->
-    <textarea placeholder="Write your review..." name="content" required></textarea>
-
+     <label class="textarea">Review
+    <input type="text" placeholder="Write your review..." name="content" accept="text/*" required></input>
+     </label>
     <!-- Image Upload -->
     <label class="file-label">
       Upload Food Image:
