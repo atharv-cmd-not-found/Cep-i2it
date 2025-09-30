@@ -18,20 +18,15 @@ app.set("views", path.join(__dirname, "views"));
 app.use(express.static(path.join(__dirname, "public")));
 
 // 2. CONFIGURE MULTER FOR IN-MEMORY STORAGE
-// Multer is now configured to store the file in memory (RAM) as a Buffer,
-// which is required before sending it to Vercel Blob.
 const upload = multer({ storage: multer.memoryStorage() });
 
-// REMOVED: The commented-out disk storage setup (was removed in previous steps)
-
-// REMOVED: The commented-out static route for local uploads has been removed.
-// The files are now accessed via a public Vercel Blob URL, not the local file system.
-
-// Dummy data (Initial posts will now need to have Vercel Blob URLs for images)
+// Dummy data (Updated to include itemName)
 let posts = [
   {
     id: uuidv4(),
     username: "sanskarkolte",
+    // NEW FIELD
+    itemName: "Poha", 
     // NOTE: This image should be a full Vercel Blob URL in a real app
     image: "https://<your-store-id>.public.blob.vercel-storage.com/demo.jpeg", 
     content: "Poha was really good ",
@@ -42,6 +37,8 @@ let posts = [
   {
     id: uuidv4(),
     username: "tonystark",
+    // NEW FIELD
+    itemName: "Coffee", 
     content: "I found a fly in my poha",
     image: null,
     rating: 1,
@@ -51,6 +48,8 @@ let posts = [
   {
     id: uuidv4(),
     username: "SteveRogers",
+    // NEW FIELD
+    itemName: "Upma", 
     content: "My Poha in the morning was so spicy ",
     image: null,
     rating: 3,
@@ -92,33 +91,32 @@ app.get("/posts/new", (req, res) => {
   res.render("new.ejs");
 });
 
-// 3. POST ROUTE TO UPLOAD TO VERCEL BLOB
+// 3. POST ROUTE TO UPLOAD TO VERCEL BLOB (Updated to handle itemName)
 app.post("/posts", upload.single("image"), async (req, res) => {
-  let { username, content, rating } = req.body;
+  // Extract itemName from req.body
+  let { username, content, rating, itemName } = req.body; 
   let id = uuidv4();
-  let imageUrl = null; // Will store the Vercel Blob URL
+  let imageUrl = null; 
 
   if (req.file) {
     // 4. UPLOAD LOGIC
     try {
-      // Use put() to upload the file buffer to Vercel Blob
       const blob = await put(`posts/${uuidv4()}-${req.file.originalname}`, req.file.buffer, {
-        access: 'public', // Make the file publicly accessible via URL
+        access: 'public', 
         contentType: req.file.mimetype,
       });
-      // The returned 'blob' object contains the full Vercel Blob URL
       imageUrl = blob.url;
     } catch (error) {
       console.error("Vercel Blob Upload Error:", error);
-      // Log error but proceed without an image URL if the upload failed
     }
   }
 
   let newPost = {
     id,
     username,
+    // Store the new itemName
+    itemName,
     content,
-    // Use the returned Vercel Blob URL
     image: imageUrl, 
     rating: Number(rating),
     createdAt: new Date(),
@@ -142,12 +140,16 @@ app.get("/posts/:id/edit", (req, res) => {
   res.render("edit.ejs", { post });
 });
 
+// PATCH ROUTE (Updated to handle itemName)
 app.patch("/posts/:id", (req, res) => {
   let { id } = req.params;
-  let { content, rating } = req.body;
+  // Extract content, rating, AND itemName from req.body
+  let { content, rating, itemName } = req.body; 
   let post = posts.find((p) => id === p.id);
 
   if (post) {
+    // Update the item name
+    post.itemName = itemName; 
     post.content = content;
     post.rating = Number(rating);
     post.updatedAt = new Date(); // update time on edit
@@ -158,8 +160,6 @@ app.patch("/posts/:id", (req, res) => {
 
 app.delete("/posts/:id", (req, res) => {
   let { id } = req.params;
-  // NOTE: In a production app, you would add logic here to call del(post.image) 
-  // from @vercel/blob to clean up the storage.
   
   posts = posts.filter((p) => p.id !== id);
   res.redirect("/posts");
