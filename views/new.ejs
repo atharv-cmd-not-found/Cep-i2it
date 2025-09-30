@@ -9,8 +9,9 @@
 <body>
   <form method="POST" action="/posts" enctype="multipart/form-data">
     <!-- Username -->
-    <input placeholder="Enter your name" name="username" required />
-
+    <label class="file-label">Enter your name:
+      <input placeholder="Enter your name" name="username" required />
+    </label>
     <!-- NEW: Item Name -->
     <input 
       placeholder="Name of the item (e.g., Coffee, Veg Biryani)" 
