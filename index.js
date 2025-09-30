@@ -25,9 +25,8 @@ let posts = [
   {
     id: uuidv4(),
     username: "sanskarkolte",
-    // NEW FIELD
+    // ADDED: itemName
     itemName: "Poha", 
-    // NOTE: This image should be a full Vercel Blob URL in a real app
     image: "https://<your-store-id>.public.blob.vercel-storage.com/demo.jpeg", 
     content: "Poha was really good ",
     rating: 4,
@@ -37,7 +36,7 @@ let posts = [
   {
     id: uuidv4(),
     username: "tonystark",
-    // NEW FIELD
+    // ADDED: itemName
     itemName: "Coffee", 
     content: "I found a fly in my poha",
     image: null,
@@ -48,7 +47,7 @@ let posts = [
   {
     id: uuidv4(),
     username: "SteveRogers",
-    // NEW FIELD
+    // ADDED: itemName
     itemName: "Upma", 
     content: "My Poha in the morning was so spicy ",
     image: null,
@@ -93,7 +92,7 @@ app.get("/posts/new", (req, res) => {
 
 // 3. POST ROUTE TO UPLOAD TO VERCEL BLOB (Updated to handle itemName)
 app.post("/posts", upload.single("image"), async (req, res) => {
-  // Extract itemName from req.body
+  // EXTRACTED: itemName from req.body
   let { username, content, rating, itemName } = req.body; 
   let id = uuidv4();
   let imageUrl = null; 
@@ -114,7 +113,7 @@ app.post("/posts", upload.single("image"), async (req, res) => {
   let newPost = {
     id,
     username,
-    // Store the new itemName
+    // STORED: itemName
     itemName,
     content,
     image: imageUrl, 
@@ -143,12 +142,12 @@ app.get("/posts/:id/edit", (req, res) => {
 // PATCH ROUTE (Updated to handle itemName)
 app.patch("/posts/:id", (req, res) => {
   let { id } = req.params;
-  // Extract content, rating, AND itemName from req.body
+  // EXTRACTED: itemName from req.body
   let { content, rating, itemName } = req.body; 
   let post = posts.find((p) => id === p.id);
 
   if (post) {
-    // Update the item name
+    // UPDATED: itemName
     post.itemName = itemName; 
     post.content = content;
     post.rating = Number(rating);
@@ -179,6 +178,7 @@ app.get("/ana", (req, res) => {
   let ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   let totalRating = 0;
 
+  // --- EXISTING LOGIC FOR DAILY AVERAGE ---
   todaysPosts.forEach((post) => {
     if (post.rating) {
       ratingCounts[post.rating] = (ratingCounts[post.rating] || 0) + 1;
@@ -190,8 +190,45 @@ app.get("/ana", (req, res) => {
     todaysPosts.length > 0
       ? (totalRating / todaysPosts.length).toFixed(2)
       : 0;
+  // --- END EXISTING LOGIC ---
+  
+  // --- NEW LOGIC: FIND HIGHEST REVIEWED ITEM (across ALL posts) ---
+  const itemRatings = {}; // { itemName: { sum: 0, count: 0 } }
 
-  res.render("ana.ejs", { todaysPosts, ratingCounts, averageRating });
+  posts.forEach(post => {
+      const name = post.itemName || 'Unknown Item';
+      const rating = post.rating || 0;
+
+      if (!itemRatings[name]) {
+          itemRatings[name] = { sum: 0, count: 0 };
+      }
+
+      itemRatings[name].sum += rating;
+      itemRatings[name].count += 1;
+  });
+
+  let bestItem = { name: "N/A", avg: 0, count: 0 };
+
+  for (const name in itemRatings) {
+      const data = itemRatings[name];
+      const avg = data.sum / data.count;
+
+      // Check if this item is better than the current best, 
+      // and ensure it has at least one rating (count > 0)
+      if (avg > bestItem.avg && data.count > 0) {
+          bestItem.name = name;
+          bestItem.avg = avg;
+          bestItem.count = data.count;
+      }
+  }
+  // --- END NEW LOGIC ---
+
+  res.render("ana.ejs", { 
+      todaysPosts, 
+      ratingCounts, 
+      averageRating,
+      bestItem // Passed the calculated best item to the EJS template
+  });
 });
 
 
