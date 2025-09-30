@@ -13,7 +13,7 @@
     <form method="POST" action="/posts/<%= post.id %>?_method=PATCH">
       
       <!-- NEW: Item Name Input Field -->
-      <label for="itemName">Item Name:</label>
+      <label for="itemName">Item Name:
       <input 
         type="text" 
         name="itemName" 
@@ -22,6 +22,7 @@
         placeholder="e.g., Veg Biryani, Coffee" 
         required
       />
+      </label>
       
       <!-- Existing Content Textarea -->
       <textarea name="content"><%= post.content %></textarea>
