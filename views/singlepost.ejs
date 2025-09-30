@@ -32,9 +32,9 @@
 
     <!-- Timestamps -->
     <div class="timestamps">
-      <p>Posted on: <%= post.createdAt.toLocaleString() %></p>
+      <p>Posted on: <%= post.createdAt.toLocaleString('en-US',{timeZone: 'IST'}) %></p>
       <% if (post.updatedAt && post.updatedAt.getTime() !== post.createdAt.getTime()) { %>
-        <p>Last updated: <%= post.updatedAt.toLocaleString() %></p>
+        <p>Last updated: <%= post.updatedAt.toLocaleString('en-US',{timeZone:'IST'}) %></p>
       <% } %>
     </div>
 
