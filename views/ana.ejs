@@ -16,12 +16,27 @@
     </div>
 
     <div class="stats">
-      <h2>Average Rating</h2>
+      <h2>Average Rating (Today)</h2>
       <p class="average"><%= averageRating %> ⭐</p>
     </div>
+    
+    <!-- NEW: Highest Reviewed Item -->
+    <div class="stats best-item">
+      <h2>Highest Rated Item (All Time)</h2>
+      <% if (bestItem.avg > 0) { %>
+        <p class="item-name"><%= bestItem.name %></p>
+        <p class="rating-info">
+            <%= bestItem.avg.toFixed(2) %> ⭐
+            <span class="review-count">(<%= bestItem.count %> Reviews)</span>
+        </p>
+      <% } else { %>
+        <p class="item-name">No Rated Items Yet</p>
+      <% } %>
+    </div>
+    <!-- END NEW -->
 
     <div class="stats">
-      <h2>Ratings Breakdown</h2>
+      <h2>Ratings Breakdown (Today)</h2>
       <ul class="breakdown">
         <li>⭐ 1 star <span><%= ratingCounts[1] %></span></li>
         <li>⭐⭐ 2 stars <span><%= ratingCounts[2] %></span></li>
