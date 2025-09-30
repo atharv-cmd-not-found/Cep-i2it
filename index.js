@@ -22,17 +22,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // Dummy data (Updated to include itemName)
 let posts = [
-  {
-    id: uuidv4(),
-    username: "sanskarkolte",
-    // ADDED: itemName
-    itemName: "Poha", 
-    image: "https://<your-store-id>.public.blob.vercel-storage.com/demo.jpeg", 
-    content: "Poha was really good ",
-    rating: 4,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
+  
   {
     id: uuidv4(),
     username: "tonystark",
