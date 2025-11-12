@@ -8,7 +8,7 @@ const path = require("path");
 const methodOverride = require("method-override");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
-const fetch = require('node-fetch');
+// const fetch = require('node-fetch'); // <--- REMOVED: Sync require is the source of the ERR_REQUIRE_ESM error
 
 // Passport Authentication Imports
 const session = require('express-session');
@@ -58,6 +58,9 @@ function getDummyPosts() {
 
 // Function to load posts from Vercel Blob (Called inside routes now)
 async function loadPosts() {
+    // FIX: Dynamically import node-fetch here
+    const { default: fetch } = await import('node-fetch');
+
     if (!PERSISTENCE_ENABLED) {
         // Return dummy data if persistence is off/failed
         console.warn("[Persistence] Blob token missing. Skipping load from remote storage.");
@@ -89,6 +92,9 @@ async function loadPosts() {
 
 // Function to save posts to Vercel Blob
 async function savePosts() {
+    // FIX: Dynamically import fetch here (even though it's not used directly with Blob put/head, keeping it here for consistency if network is needed)
+    const { default: fetch } = await import('node-fetch');
+    
     if (!PERSISTENCE_ENABLED) {
         console.warn("[Persistence] Blob token missing. Skipping save to remote storage.");
         return;
@@ -111,6 +117,10 @@ posts = getDummyPosts(); // Initialize with dummy data immediately to avoid cras
 
 // --- PASSPORT SETUP ---
 const users = [];
+
+const ADMIN_USERNAME = "admin";
+const DEPLOYED_URL = "https://cep-i2it.vercel.app";
+const HOST = process.env.NODE_ENV === 'production' ? DEPLOYED_URL : "http://localhost:3000";
 
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
@@ -201,7 +211,6 @@ function ensureAuthenticated(req, res, next) {
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ------------------- LOGIN PART ------------------- //
-const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "12345";
 
 app.get("/", (req, res) => {
@@ -250,7 +259,7 @@ app.get('/logout', (req, res) => {
 // ------------------- POSTS PART (Secured) ------------------- //
 
 app.get("/posts", ensureAuthenticated, async (req, res) => { 
-  // **NEW:** Asynchronously load data on the first request for the life of this serverless instance
+  // Asynchronously load data on the first request for the life of this serverless instance
   if (!isDataLoaded) {
       posts = await loadPosts();
       isDataLoaded = true;
@@ -437,7 +446,7 @@ app.use((req, res) => {
     res.status(404).send("Error 404: The requested resource was not found.");
 });
 
-// Vercel requires the app object to be exported, not running app.listen()
+// Vercel requires the app object to be exported
 module.exports = app;
 
 // Keep app.listen() for local testing only
