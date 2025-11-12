@@ -77,7 +77,6 @@ app.use(passport.session());
 // Utility function to get the current user's ID/info
 function getCurrentUser(req) {
     if (req.session.isAdmin) {
-        // ADMIN is not considered a user for post ownership/modification
         return { 
             id: 'ADMIN_SESSION_ID', 
             username: ADMIN_USERNAME,
@@ -115,7 +114,7 @@ let posts = [
     content: "I found a fly in my poha",
     image: null,
     rating: 1,
-    createdAt: new Date(Date.now() - 86400000), 
+    createdAt: new Date(Date.now() - 86400000), // Yesterday (will appear at the bottom)
     updatedAt: new Date(Date.now() - 86400000),
   },
   {
@@ -126,7 +125,7 @@ let posts = [
     content: "My Poha in the morning was so spicy ",
     image: null,
     rating: 3,
-    createdAt: new Date(),
+    createdAt: new Date(), // Today (will appear at the top)
     updatedAt: new Date(),
   },
 ];
@@ -181,8 +180,19 @@ app.get('/logout', (req, res) => {
 
 app.get("/posts", ensureAuthenticated, (req, res) => {
   const currentUser = getCurrentUser(req);
+  
+  // NEW: Sort posts by createdAt timestamp in descending order (newest first)
+  const sortedPosts = posts.sort((a, b) => {
+      // Convert dates to numerical timestamps for comparison
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      
+      // Sort in descending order (b - a)
+      return dateB - dateA;
+  });
+
   res.render("index.ejs", { 
-      posts,
+      posts: sortedPosts, // Pass the sorted array
       currentUser
   });
 });
@@ -209,7 +219,6 @@ app.post("/posts", ensureAuthenticated, upload.single("image"), async (req, res)
   }
   
   const currentUser = getCurrentUser(req);
-  // Admin can post, but the post will be owned by their session ID
   let postUsername = req.session.isAdmin ? username : currentUser.displayName; 
 
   let newPost = {
@@ -239,7 +248,6 @@ app.get("/posts/:id/edit", ensureAuthenticated, (req, res) => {
   let post = posts.find((p) => id === p.id);
   const currentUser = getCurrentUser(req);
 
-  // Server-side Authorization check: ONLY AUTHOR CAN EDIT
   const isAuthor = currentUser && post.authorId && (currentUser.id === post.authorId);
   
   if (!isAuthor) {
@@ -249,14 +257,12 @@ app.get("/posts/:id/edit", ensureAuthenticated, (req, res) => {
   res.render("edit.ejs", { post });
 });
 
-// PATCH ROUTE (Update post)
 app.patch("/posts/:id", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
   let { content, rating, itemName } = req.body; 
   let post = posts.find((p) => id === p.id);
   const currentUser = getCurrentUser(req);
 
-  // Server-side Authorization check: ONLY AUTHOR CAN UPDATE
   const isAuthor = currentUser && post.authorId && (currentUser.id === post.authorId);
 
   if (!post || !isAuthor) {
@@ -271,13 +277,11 @@ app.patch("/posts/:id", ensureAuthenticated, (req, res) => {
   res.redirect("/posts");
 });
 
-// DELETE ROUTE
 app.delete("/posts/:id", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
   let postToDelete = posts.find((p) => id === p.id);
   const currentUser = getCurrentUser(req);
 
-  // Server-side Authorization check: ONLY AUTHOR CAN DELETE
   const isAuthor = currentUser && postToDelete.authorId && (currentUser.id === postToDelete.authorId);
 
   if (!postToDelete || !isAuthor) {
