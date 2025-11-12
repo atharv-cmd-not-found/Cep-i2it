@@ -1,13 +1,72 @@
 const express = require("express");
 const app = express();
+// Load environment variables from .env.local
+require('dotenv').config({ path: './.env.local' }); 
+
 let port = 3000;
 const path = require("path");
 const methodOverride = require("method-override");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
 
+// Passport Authentication Imports
+const session = require('express-session');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+
 // 1. IMPORT VERCEL BLOB SDK
 const { put } = require("@vercel/blob");
+
+// --- NEW: Dynamic Host Configuration ---
+// Use the Vercel URL when deployed (it's automatically set in the Vercel environment)
+// Default to localhost for local development
+const CALLBACK_HOST = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000";
+// Since you provided the full URL, we'll use a direct conditional check for the deployment environment
+// If the app is deployed, we'll use the provided Vercel URL. Otherwise, localhost.
+const DEPLOYED_URL = "https://cep-i2it.vercel.app";
+const HOST = process.env.NODE_ENV === 'production' ? DEPLOYED_URL : "http://localhost:3000";
+
+// --- PASSPORT SETUP ---
+
+// Use a simple, dummy data store for users logged in via Google 
+// (In a real app, this would be a database)
+const users = [];
+
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    // FIX: Using the dynamic HOST URL for callback
+    callbackURL: `${HOST}/auth/google/callback` 
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    // Check if the user already exists in our dummy 'database'
+    let user = users.find(u => u.googleId === profile.id);
+    if (!user) {
+      // Create a new user if they don't exist
+      user = { 
+        id: uuidv4(), // Use our own ID structure
+        googleId: profile.id,
+        displayName: profile.displayName,
+        username: profile.displayName.replace(/\s/g, '').toLowerCase() + '_google', // Generate a unique username
+        isGoogle: true
+      };
+      users.push(user);
+    }
+    return cb(null, user);
+  }
+));
+
+// Serialize user into the session
+passport.serializeUser((user, done) => {
+  done(null, user.id);
+});
+
+// Deserialize user from the session
+passport.deserializeUser((id, done) => {
+  const user = users.find(u => u.id === id);
+  done(null, user);
+});
+
 
 // Middleware
 app.use(express.urlencoded({ extended: true }));
@@ -16,6 +75,27 @@ app.use(methodOverride("_method"));
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 app.use(express.static(path.join(__dirname, "public")));
+
+// Configure Session Middleware
+app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false
+}));
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Authentication Check Middleware
+function ensureAuthenticated(req, res, next) {
+    // Checks for a logged-in user either from Google or our mock admin
+    if (req.isAuthenticated() || req.session.isAdmin) { 
+        return next(); 
+    }
+    res.redirect('/login');
+}
+
 
 // 2. CONFIGURE MULTER FOR IN-MEMORY STORAGE
 const upload = multer({ storage: multer.memoryStorage() });
@@ -48,40 +128,75 @@ let posts = [
 ];
 
 // ------------------- LOGIN PART ------------------- //
-const USERNAME = "admin";
-const PASSWORD = "12345";
+const ADMIN_USERNAME = "admin";
+const ADMIN_PASSWORD = "12345";
 
 app.get("/", (req, res) => {
   res.redirect("/login");
 });
 
 app.get("/login", (req, res) => {
-  res.render("login.ejs", { error: null });
+  // Pass the error message from the session if it exists
+  const error = req.session.authError;
+  req.session.authError = null; // Clear the error
+  res.render("login.ejs", { error });
 });
 
+// Original Admin Login POST route
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
 
-  if (username === USERNAME && password === PASSWORD) {
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    // Set a session variable to mark the admin login
+    req.session.isAdmin = true; 
     res.redirect("/posts");
   } else {
-    res.render("login.ejs", { error: "Invalid username or password" });
+    // Set a session variable for the error
+    req.session.authError = "Invalid username or password";
+    res.redirect("/login");
   }
 });
 
-// ------------------- POSTS PART ------------------- //
+// --- NEW GOOGLE AUTH ROUTES ---
+
+// Route to initiate Google OAuth
+app.get('/auth/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+// Google Callback route
+app.get('/auth/google/callback', 
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect to home page.
+    res.redirect('/posts');
+  });
+
+// Logout route
+app.get('/logout', (req, res) => {
+    // Clear the session variables
+    req.session.destroy((err) => {
+        if (err) {
+            return res.redirect('/posts'); // Fallback in case of error
+        }
+        // Clear the cookie and redirect to login
+        res.clearCookie('connect.sid'); 
+        res.redirect('/login');
+    });
+});
+// ------------------- POSTS PART (Secured with ensureAuthenticated) ------------------- //
 
 // Routes
-app.get("/posts", (req, res) => {
+// Apply the authentication check to all protected routes
+app.get("/posts", ensureAuthenticated, (req, res) => {
   res.render("index.ejs", { posts });
 });
 
-app.get("/posts/new", (req, res) => {
+app.get("/posts/new", ensureAuthenticated, (req, res) => {
   res.render("new.ejs");
 });
 
 // 3. POST ROUTE TO UPLOAD TO VERCEL BLOB (Updated to handle itemName)
-app.post("/posts", upload.single("image"), async (req, res) => {
+app.post("/posts", ensureAuthenticated, upload.single("image"), async (req, res) => {
   // EXTRACTED: itemName from req.body
   let { username, content, rating, itemName } = req.body; 
   let id = uuidv4();
@@ -99,10 +214,13 @@ app.post("/posts", upload.single("image"), async (req, res) => {
       console.error("Vercel Blob Upload Error:", error);
     }
   }
+  
+  // NOTE: If logged in via Google, we might use their display name
+  let postUsername = req.session.isAdmin ? username : req.user.displayName; 
 
   let newPost = {
     id,
-    username,
+    username: postUsername,
     // STORED: itemName
     itemName,
     content,
@@ -117,20 +235,20 @@ app.post("/posts", upload.single("image"), async (req, res) => {
 });
 
 // Show single post
-app.get("/posts/:id", (req, res) => {
+app.get("/posts/:id", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
   let post = posts.find((p) => id === p.id);
   res.render("singlepost.ejs", { post });
 });
 
-app.get("/posts/:id/edit", (req, res) => {
+app.get("/posts/:id/edit", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
   let post = posts.find((p) => id === p.id);
   res.render("edit.ejs", { post });
 });
 
 // PATCH ROUTE (Updated to handle itemName)
-app.patch("/posts/:id", (req, res) => {
+app.patch("/posts/:id", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
   // EXTRACTED: itemName from req.body
   let { content, rating, itemName } = req.body; 
@@ -147,15 +265,15 @@ app.patch("/posts/:id", (req, res) => {
   res.redirect("/posts");
 });
 
-app.delete("/posts/:id", (req, res) => {
+app.delete("/posts/:id", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
   
   posts = posts.filter((p) => p.id !== id);
   res.redirect("/posts");
 });
 
-// ------------------- ANALYTICS PART ------------------- //
-app.get("/ana", (req, res) => {
+// ------------------- ANALYTICS PART (Secured) ------------------- //
+app.get("/ana", ensureAuthenticated, (req, res) => {
   let today = new Date();
   today.setHours(0, 0, 0, 0);
 
