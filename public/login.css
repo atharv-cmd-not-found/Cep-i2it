@@ -68,7 +68,7 @@ form input:focus {
   box-shadow: 0 0 5px #ff4d4d;
 }
 
-/* Button */
+/* Button (Original Red Style) */
 form button {
   width: 100%;
   padding: 12px;
@@ -80,14 +80,13 @@ form button {
   color: #fff;
   cursor: pointer;
   transition: 0.3s;
+  margin-bottom: 10px; /* Added margin for separation */
 }
 
 form button:hover {
   background: #cc0000;
   transform: translateY(-2px);
 }
-
-/* ... (Existing styles for body, .login-container, h1, h2, etc.) ... */
 
 /* --- NEW GOOGLE AUTH STYLES --- */
 
@@ -118,30 +117,31 @@ form button:hover {
   right: 0;
 }
 
-
-/* Google Button Styling (replacing the standard button look) */
+/* Google Button Styling - Similar to Form Button */
 .google-btn {
+  /* Layout and alignment for logo + text */
   display: flex;
   align-items: center;
   justify-content: center;
+  text-decoration: none; 
+
+  /* Styling copied from form button */
   width: 100%;
   padding: 12px;
-  /* Standard Google Sign-In button colors */
-  background: #4285f4; 
+  background: #ff3333; /* Use the same red background */
   border: none;
   border-radius: 8px;
   font-size: 1rem;
   font-weight: bold;
   color: #fff;
   cursor: pointer;
-  text-decoration: none; /* Remove underline from <a> tag */
   transition: 0.3s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4); /* Added a subtle shadow */
 }
 
 .google-btn:hover {
-  background: #3c77e0;
-  transform: translateY(-1px);
+  background: #cc0000; /* Use the same hover color */
+  transform: translateY(-2px);
 }
 
 /* Style for the Google Logo image inside the button */
@@ -149,6 +149,7 @@ form button:hover {
   width: 20px;
   margin-right: 10px;
 }
+
 
 /* Animation */
 @keyframes fadeIn {
