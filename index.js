@@ -18,11 +18,7 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { put } = require("@vercel/blob");
 
 // --- NEW: Dynamic Host Configuration ---
-// Use the Vercel URL when deployed (it's automatically set in the Vercel environment)
-// Default to localhost for local development
-const CALLBACK_HOST = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000";
-// Since you provided the full URL, we'll use a direct conditional check for the deployment environment
-// If the app is deployed, we'll use the provided Vercel URL. Otherwise, localhost.
+// Use the Vercel URL when deployed, default to localhost for development
 const DEPLOYED_URL = "https://cep-i2it.vercel.app";
 const HOST = process.env.NODE_ENV === 'production' ? DEPLOYED_URL : "http://localhost:3000";
 
@@ -87,6 +83,23 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Utility function to get the current user's ID/info
+function getCurrentUser(req) {
+    if (req.session.isAdmin) {
+        // Use a consistent ID for the Admin session
+        return { 
+            id: 'ADMIN_SESSION_ID', 
+            username: ADMIN_USERNAME,
+            isAdmin: true 
+        };
+    }
+    if (req.user && req.user.id) {
+        // User logged in via Google
+        return req.user;
+    }
+    return null; // No authenticated user
+}
+
 // Authentication Check Middleware
 function ensureAuthenticated(req, res, next) {
     // Checks for a logged-in user either from Google or our mock admin
@@ -100,24 +113,26 @@ function ensureAuthenticated(req, res, next) {
 // 2. CONFIGURE MULTER FOR IN-MEMORY STORAGE
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Dummy data (Updated to include itemName)
+// ------------------- DUMMY DATA (Updated to include authorId) ------------------- //
+const ADMIN_USERNAME = "admin";
+
 let posts = [
   
   {
     id: uuidv4(),
+    authorId: 'ADMIN_SESSION_ID', // Post 1 owned by Admin
     username: "tonystark",
-    // ADDED: itemName
     itemName: "Coffee", 
     content: "I found a fly in my poha",
     image: null,
     rating: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: new Date(Date.now() - 86400000), // Yesterday
+    updatedAt: new Date(Date.now() - 86400000),
   },
   {
     id: uuidv4(),
+    authorId: 'STEVE_ROGERS_ID', // Placeholder ID for a non-admin user
     username: "SteveRogers",
-    // ADDED: itemName
     itemName: "Upma", 
     content: "My Poha in the morning was so spicy ",
     image: null,
@@ -128,7 +143,6 @@ let posts = [
 ];
 
 // ------------------- LOGIN PART ------------------- //
-const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "12345";
 
 app.get("/", (req, res) => {
@@ -136,9 +150,8 @@ app.get("/", (req, res) => {
 });
 
 app.get("/login", (req, res) => {
-  // Pass the error message from the session if it exists
   const error = req.session.authError;
-  req.session.authError = null; // Clear the error
+  req.session.authError = null; 
   res.render("login.ejs", { error });
 });
 
@@ -147,63 +160,57 @@ app.post("/login", (req, res) => {
   const { username, password } = req.body;
 
   if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-    // Set a session variable to mark the admin login
     req.session.isAdmin = true; 
     res.redirect("/posts");
   } else {
-    // Set a session variable for the error
     req.session.authError = "Invalid username or password";
     res.redirect("/login");
   }
 });
 
-// --- NEW GOOGLE AUTH ROUTES ---
-
-// Route to initiate Google OAuth
+// --- GOOGLE AUTH ROUTES ---
 app.get('/auth/google',
   passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-// Google Callback route
 app.get('/auth/google/callback', 
   passport.authenticate('google', { failureRedirect: '/login' }),
   function(req, res) {
-    // Successful authentication, redirect to home page.
     res.redirect('/posts');
   });
 
 // Logout route
 app.get('/logout', (req, res) => {
-    // Clear the session variables
     req.session.destroy((err) => {
         if (err) {
-            return res.redirect('/posts'); // Fallback in case of error
+            return res.redirect('/posts'); 
         }
-        // Clear the cookie and redirect to login
         res.clearCookie('connect.sid'); 
         res.redirect('/login');
     });
 });
-// ------------------- POSTS PART (Secured with ensureAuthenticated) ------------------- //
+
+// ------------------- POSTS PART (Secured) ------------------- //
 
 // Routes
-// Apply the authentication check to all protected routes
 app.get("/posts", ensureAuthenticated, (req, res) => {
-  res.render("index.ejs", { posts });
+  const currentUser = getCurrentUser(req);
+  res.render("index.ejs", { 
+      posts,
+      currentUser // Pass user data for authorization
+  });
 });
 
 app.get("/posts/new", ensureAuthenticated, (req, res) => {
   res.render("new.ejs");
 });
 
-// 3. POST ROUTE TO UPLOAD TO VERCEL BLOB (Updated to handle itemName)
+// POST ROUTE TO UPLOAD TO VERCEL BLOB
 app.post("/posts", ensureAuthenticated, upload.single("image"), async (req, res) => {
-  // EXTRACTED: itemName from req.body
   let { username, content, rating, itemName } = req.body; 
   let id = uuidv4();
   let imageUrl = null; 
 
   if (req.file) {
-    // 4. UPLOAD LOGIC
     try {
       const blob = await put(`posts/${uuidv4()}-${req.file.originalname}`, req.file.buffer, {
         access: 'public', 
@@ -215,13 +222,15 @@ app.post("/posts", ensureAuthenticated, upload.single("image"), async (req, res)
     }
   }
   
-  // NOTE: If logged in via Google, we might use their display name
-  let postUsername = req.session.isAdmin ? username : req.user.displayName; 
+  const currentUser = getCurrentUser(req);
+
+  // Use the name from the form if admin, otherwise use Google display name
+  let postUsername = req.session.isAdmin ? username : currentUser.displayName; 
 
   let newPost = {
     id,
+    authorId: currentUser.id, // Store the ID of the user who created the post
     username: postUsername,
-    // STORED: itemName
     itemName,
     content,
     image: imageUrl, 
@@ -244,29 +253,54 @@ app.get("/posts/:id", ensureAuthenticated, (req, res) => {
 app.get("/posts/:id/edit", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
   let post = posts.find((p) => id === p.id);
+  const currentUser = getCurrentUser(req);
+
+  // Authorization check (Server-side)
+  const isAuthor = currentUser && post.authorId && (currentUser.id === post.authorId);
+  const isAdmin = currentUser && currentUser.isAdmin;
+  
+  if (!isAuthor && !isAdmin) {
+    return res.status(403).send("Error 403: Forbidden - You can only edit your own posts.");
+  }
+  
   res.render("edit.ejs", { post });
 });
 
-// PATCH ROUTE (Updated to handle itemName)
+// PATCH ROUTE 
 app.patch("/posts/:id", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
-  // EXTRACTED: itemName from req.body
   let { content, rating, itemName } = req.body; 
   let post = posts.find((p) => id === p.id);
+  const currentUser = getCurrentUser(req);
 
-  if (post) {
-    // UPDATED: itemName
-    post.itemName = itemName; 
-    post.content = content;
-    post.rating = Number(rating);
-    post.updatedAt = new Date(); // update time on edit
+  // Authorization check (Server-side)
+  const isAuthor = currentUser && post.authorId && (currentUser.id === post.authorId);
+  const isAdmin = currentUser && currentUser.isAdmin;
+
+  if (!post || (!isAuthor && !isAdmin)) {
+    return res.status(403).send("Error 403: Forbidden - Cannot update this post.");
   }
+
+  post.itemName = itemName; 
+  post.content = content;
+  post.rating = Number(rating);
+  post.updatedAt = new Date(); 
 
   res.redirect("/posts");
 });
 
 app.delete("/posts/:id", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
+  let postToDelete = posts.find((p) => id === p.id);
+  const currentUser = getCurrentUser(req);
+
+  // Authorization check (Server-side)
+  const isAuthor = currentUser && postToDelete.authorId && (currentUser.id === postToDelete.authorId);
+  const isAdmin = currentUser && currentUser.isAdmin;
+
+  if (!postToDelete || (!isAuthor && !isAdmin)) {
+    return res.status(403).send("Error 403: Forbidden - Cannot delete this post.");
+  }
   
   posts = posts.filter((p) => p.id !== id);
   res.redirect("/posts");
@@ -286,7 +320,6 @@ app.get("/ana", ensureAuthenticated, (req, res) => {
   let ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   let totalRating = 0;
 
-  // --- EXISTING LOGIC FOR DAILY AVERAGE ---
   todaysPosts.forEach((post) => {
     if (post.rating) {
       ratingCounts[post.rating] = (ratingCounts[post.rating] || 0) + 1;
@@ -298,10 +331,8 @@ app.get("/ana", ensureAuthenticated, (req, res) => {
     todaysPosts.length > 0
       ? (totalRating / todaysPosts.length).toFixed(2)
       : 0;
-  // --- END EXISTING LOGIC ---
   
-  // --- NEW LOGIC: FIND HIGHEST REVIEWED ITEM (across ALL posts) ---
-  const itemRatings = {}; // { itemName: { sum: 0, count: 0 } }
+  const itemRatings = {}; 
 
   posts.forEach(post => {
       const name = post.itemName || 'Unknown Item';
@@ -321,21 +352,18 @@ app.get("/ana", ensureAuthenticated, (req, res) => {
       const data = itemRatings[name];
       const avg = data.sum / data.count;
 
-      // Check if this item is better than the current best, 
-      // and ensure it has at least one rating (count > 0)
       if (avg > bestItem.avg && data.count > 0) {
           bestItem.name = name;
           bestItem.avg = avg;
           bestItem.count = data.count;
       }
   }
-  // --- END NEW LOGIC ---
 
   res.render("ana.ejs", { 
       todaysPosts, 
       ratingCounts, 
       averageRating,
-      bestItem // Passed the calculated best item to the EJS template
+      bestItem 
   });
 });
 

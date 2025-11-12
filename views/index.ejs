@@ -21,17 +21,14 @@
      <% posts.forEach(post => { %>
         <div class="post">
           <h3 class="username">@<%= post.username %></h3>
-          <!-- NEW: Item Name Field -->
           <h3 class="item-name">Item:<%= post.itemName %></h3>
           
           <p class="content"><%= post.content %></p>
     
-          <!-- Show image if available -->
           <% if(post.image) { %>
             <img src="<%= post.image %>" alt="Review Image" class="post-image">
           <% } %>
 
-          <!-- Star Rating -->
           <div class="stars">
             
             <% for(let i=1; i<=5; i++){ %>
@@ -41,28 +38,34 @@
                 ☆
               <% } %>
            
-            <% } %>
+             <% } %>
           </div>
 
-          <!-- Timestamps -->
           <div class="timestamps">
             <p>Posted on: <%= post.createdAt.toLocaleString('en-US',{timeZone: 'IST'}) %></p>
             <% if (post.updatedAt && post.updatedAt.getTime() !== post.createdAt.getTime()) { %>
               <p>Last updated: <%= post.updatedAt.toLocaleString('en-US',{timeZone:'IST'}) %></p>
-         
+ 
             <% } %>
           </div>
 
           <div class="post-actions">
             <a href="/posts/<%= post.id %>" class="btn-view">View</a>
-            <a href="/posts/<%= post.id %>/edit" class="btn-edit">Edit</a>
 
-            <!-- Delete Form -->
-            <form method="POST" action="/posts/<%= post.id %>?_method=DELETE" class="delete-form">
-          
-              <button type="submit" class="btn-delete">Delete</button>
-            </form>
-          </div>
+            <% 
+              // Check if post.authorId exists AND if it matches the current user's ID
+              const isAuthor = currentUser && post.authorId && (currentUser.id === post.authorId);
+              const isAdmin = currentUser && currentUser.isAdmin;
+            %>
+            
+            <% if (isAuthor || isAdmin) { %>
+              <a href="/posts/<%= post.id %>/edit" class="btn-edit">Edit</a>
+
+              <form method="POST" action="/posts/<%= post.id %>?_method=DELETE" class="delete-form">
+                <button type="submit" class="btn-delete">Delete</button>
+              </form>
+            <% } %>
+            </div>
         </div>
      <% }) %>
     </div>
