@@ -87,6 +87,69 @@ form button:hover {
   transform: translateY(-2px);
 }
 
+/* ... (Existing styles for body, .login-container, h1, h2, etc.) ... */
+
+/* --- NEW GOOGLE AUTH STYLES --- */
+
+/* Separator style (for the "OR" text) */
+.google-auth p {
+  margin: 20px 0 15px;
+  color: #f2f2f2;
+  font-size: 0.9rem;
+  font-weight: 500;
+  position: relative;
+}
+
+.google-auth p::before,
+.google-auth p::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background: #4d0d0d;
+}
+
+.google-auth p::before {
+  left: 0;
+}
+
+.google-auth p::after {
+  right: 0;
+}
+
+
+/* Google Button Styling (replacing the standard button look) */
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 12px;
+  /* Standard Google Sign-In button colors */
+  background: #4285f4; 
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: bold;
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none; /* Remove underline from <a> tag */
+  transition: 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.google-btn:hover {
+  background: #3c77e0;
+  transform: translateY(-1px);
+}
+
+/* Style for the Google Logo image inside the button */
+.google-btn img {
+  width: 20px;
+  margin-right: 10px;
+}
+
 /* Animation */
 @keyframes fadeIn {
   from { opacity: 0; transform: scale(0.9); }
