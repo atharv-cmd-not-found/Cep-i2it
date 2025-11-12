@@ -70,9 +70,9 @@ form input:focus {
 
 /* Button (Original Red Style) */
 form button {
-  width: 100%;
-  padding: 12px;
-  background: #ff3333;
+  width: 100%; /* Same width */
+  padding: 12px; /* Same vertical padding */
+  background: #ff3333; 
   border: none;
   border-radius: 8px;
   font-size: 1rem;
@@ -80,7 +80,7 @@ form button {
   color: #fff;
   cursor: pointer;
   transition: 0.3s;
-  margin-bottom: 10px; /* Added margin for separation */
+  margin-bottom: 10px; 
 }
 
 form button:hover {
@@ -125,10 +125,10 @@ form button:hover {
   justify-content: center;
   text-decoration: none; 
 
-  /* Styling copied from form button */
-  width: 100%;
-  padding: 12px;
-  background: #ff3333; /* Use the same red background */
+  /* Sizing properties are identical to form button */
+  width: 100%; /* Same width */
+  padding: 12px; /* Same vertical padding */
+  background: #ff3333; 
   border: none;
   border-radius: 8px;
   font-size: 1rem;
@@ -136,11 +136,11 @@ form button:hover {
   color: #fff;
   cursor: pointer;
   transition: 0.3s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4); /* Added a subtle shadow */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4); 
 }
 
 .google-btn:hover {
-  background: #cc0000; /* Use the same hover color */
+  background: #cc0000; 
   transform: translateY(-2px);
 }
 
