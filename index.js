@@ -8,7 +8,7 @@ const path = require("path");
 const methodOverride = require("method-override");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
-const fetch = require('node-fetch'); // Required for fetching data from Blob
+const fetch = require('node-fetch');
 
 // Passport Authentication Imports
 const session = require('express-session');
@@ -23,37 +23,45 @@ const POSTS_BLOB_PATH = 'posts.json';
 const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
 const PERSISTENCE_ENABLED = !!BLOB_READ_WRITE_TOKEN;
 
-// Dummy data structure placeholder
+// Dummy data structure placeholder - MUST be initialized synchronously
 let posts = [];
+let isDataLoaded = false; // Flag to track if the data has been loaded from Blob
+
+// Function to get the initial dummy data set
+function getDummyPosts() {
+     return [
+        {
+            id: uuidv4(),
+            authorId: 'ADMIN_SESSION_ID', 
+            username: "tonystark",
+            itemName: "Coffee", 
+            content: "I found a fly in my poha",
+            image: null,
+            rating: 1,
+            createdAt: new Date(Date.now() - 86400000), 
+            updatedAt: new Date(Date.now() - 86400000),
+        },
+        {
+            id: uuidv4(),
+            authorId: 'FIXED_GOOGLE_USER_ID_12345', 
+            username: "SteveRogers",
+            itemName: "Upma", 
+            content: "My Poha in the morning was so spicy ",
+            image: null,
+            rating: 3,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        },
+    ];
+}
+
 
 // Function to load posts from Vercel Blob (Called inside routes now)
 async function loadPosts() {
     if (!PERSISTENCE_ENABLED) {
         // Return dummy data if persistence is off/failed
-        return [
-            {
-                id: uuidv4(),
-                authorId: 'ADMIN_SESSION_ID', 
-                username: "tonystark",
-                itemName: "Coffee", 
-                content: "I found a fly in my poha",
-                image: null,
-                rating: 1,
-                createdAt: new Date(Date.now() - 86400000), 
-                updatedAt: new Date(Date.now() - 86400000),
-            },
-            {
-                id: uuidv4(),
-                authorId: 'FIXED_GOOGLE_USER_ID_12345', 
-                username: "SteveRogers",
-                itemName: "Upma", 
-                content: "My Poha in the morning was so spicy ",
-                image: null,
-                rating: 3,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            },
-        ];
+        console.warn("[Persistence] Blob token missing. Skipping load from remote storage.");
+        return getDummyPosts();
     }
     
     try {
@@ -73,8 +81,9 @@ async function loadPosts() {
         }));
 
     } catch (error) {
-        console.warn(`[Persistence] posts.json not found or failed to load. Using dummy data.`);
-        return []; // Return empty array on critical failure
+        console.warn(`[Persistence] posts.json not found or failed to load. Using dummy data. Error: ${error.message}`);
+        // If fetch fails, return initial dummy data
+        return getDummyPosts();
     }
 }
 
@@ -96,9 +105,8 @@ async function savePosts() {
     }
 }
 
-// Immediately load dummy data; the first request will trigger the real load/overwrite.
-// This ensures the 'posts' array is never undefined on synchronous startup.
-posts = await loadPosts();
+// **SYNCHRONOUS INITIALIZATION**
+posts = getDummyPosts(); // Initialize with dummy data immediately to avoid crashes
 
 
 // --- PASSPORT SETUP ---
@@ -142,7 +150,7 @@ passport.deserializeUser((id, done) => {
 });
 
 
-// Middleware (Synchronous setup starts here)
+// Middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride("_method"));
 
@@ -241,13 +249,13 @@ app.get('/logout', (req, res) => {
 
 // ------------------- POSTS PART (Secured) ------------------- //
 
-app.get("/posts", ensureAuthenticated, async (req, res) => { // Made async to load posts
-  // Real-time load/update of posts on every request
-  if (PERSISTENCE_ENABLED) {
-      // Overwrite local posts array with latest from Blob
-      posts = await loadPosts(); 
+app.get("/posts", ensureAuthenticated, async (req, res) => { 
+  // **NEW:** Asynchronously load data on the first request for the life of this serverless instance
+  if (!isDataLoaded) {
+      posts = await loadPosts();
+      isDataLoaded = true;
   }
-  
+
   const currentUser = getCurrentUser(req);
   
   const sortedPosts = posts.sort((a, b) => {
