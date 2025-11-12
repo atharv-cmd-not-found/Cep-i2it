@@ -18,32 +18,25 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { put } = require("@vercel/blob");
 
 // --- NEW: Dynamic Host Configuration ---
-// Use the Vercel URL when deployed, default to localhost for development
 const DEPLOYED_URL = "https://cep-i2it.vercel.app";
 const HOST = process.env.NODE_ENV === 'production' ? DEPLOYED_URL : "http://localhost:3000";
 
 // --- PASSPORT SETUP ---
-
-// Use a simple, dummy data store for users logged in via Google 
-// (In a real app, this would be a database)
 const users = [];
 
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    // FIX: Using the dynamic HOST URL for callback
     callbackURL: `${HOST}/auth/google/callback` 
   },
   function(accessToken, refreshToken, profile, cb) {
-    // Check if the user already exists in our dummy 'database'
     let user = users.find(u => u.googleId === profile.id);
     if (!user) {
-      // Create a new user if they don't exist
       user = { 
-        id: uuidv4(), // Use our own ID structure
+        id: uuidv4(),
         googleId: profile.id,
         displayName: profile.displayName,
-        username: profile.displayName.replace(/\s/g, '').toLowerCase() + '_google', // Generate a unique username
+        username: profile.displayName.replace(/\s/g, '').toLowerCase() + '_google',
         isGoogle: true
       };
       users.push(user);
@@ -52,12 +45,10 @@ passport.use(new GoogleStrategy({
   }
 ));
 
-// Serialize user into the session
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
 
-// Deserialize user from the session
 passport.deserializeUser((id, done) => {
   const user = users.find(u => u.id === id);
   done(null, user);
@@ -86,7 +77,7 @@ app.use(passport.session());
 // Utility function to get the current user's ID/info
 function getCurrentUser(req) {
     if (req.session.isAdmin) {
-        // Use a consistent ID for the Admin session
+        // ADMIN is not considered a user for post ownership/modification
         return { 
             id: 'ADMIN_SESSION_ID', 
             username: ADMIN_USERNAME,
@@ -94,15 +85,13 @@ function getCurrentUser(req) {
         };
     }
     if (req.user && req.user.id) {
-        // User logged in via Google
         return req.user;
     }
-    return null; // No authenticated user
+    return null; 
 }
 
 // Authentication Check Middleware
 function ensureAuthenticated(req, res, next) {
-    // Checks for a logged-in user either from Google or our mock admin
     if (req.isAuthenticated() || req.session.isAdmin) { 
         return next(); 
     }
@@ -113,25 +102,25 @@ function ensureAuthenticated(req, res, next) {
 // 2. CONFIGURE MULTER FOR IN-MEMORY STORAGE
 const upload = multer({ storage: multer.memoryStorage() });
 
-// ------------------- DUMMY DATA (Updated to include authorId) ------------------- //
+// ------------------- DUMMY DATA ------------------- //
 const ADMIN_USERNAME = "admin";
 
 let posts = [
   
   {
     id: uuidv4(),
-    authorId: 'ADMIN_SESSION_ID', // Post 1 owned by Admin
+    authorId: 'ADMIN_SESSION_ID', 
     username: "tonystark",
     itemName: "Coffee", 
     content: "I found a fly in my poha",
     image: null,
     rating: 1,
-    createdAt: new Date(Date.now() - 86400000), // Yesterday
+    createdAt: new Date(Date.now() - 86400000), 
     updatedAt: new Date(Date.now() - 86400000),
   },
   {
     id: uuidv4(),
-    authorId: 'STEVE_ROGERS_ID', // Placeholder ID for a non-admin user
+    authorId: 'STEVE_ROGERS_ID', 
     username: "SteveRogers",
     itemName: "Upma", 
     content: "My Poha in the morning was so spicy ",
@@ -155,7 +144,6 @@ app.get("/login", (req, res) => {
   res.render("login.ejs", { error });
 });
 
-// Original Admin Login POST route
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -191,12 +179,11 @@ app.get('/logout', (req, res) => {
 
 // ------------------- POSTS PART (Secured) ------------------- //
 
-// Routes
 app.get("/posts", ensureAuthenticated, (req, res) => {
   const currentUser = getCurrentUser(req);
   res.render("index.ejs", { 
       posts,
-      currentUser // Pass user data for authorization
+      currentUser
   });
 });
 
@@ -204,7 +191,6 @@ app.get("/posts/new", ensureAuthenticated, (req, res) => {
   res.render("new.ejs");
 });
 
-// POST ROUTE TO UPLOAD TO VERCEL BLOB
 app.post("/posts", ensureAuthenticated, upload.single("image"), async (req, res) => {
   let { username, content, rating, itemName } = req.body; 
   let id = uuidv4();
@@ -223,13 +209,12 @@ app.post("/posts", ensureAuthenticated, upload.single("image"), async (req, res)
   }
   
   const currentUser = getCurrentUser(req);
-
-  // Use the name from the form if admin, otherwise use Google display name
+  // Admin can post, but the post will be owned by their session ID
   let postUsername = req.session.isAdmin ? username : currentUser.displayName; 
 
   let newPost = {
     id,
-    authorId: currentUser.id, // Store the ID of the user who created the post
+    authorId: currentUser.id, 
     username: postUsername,
     itemName,
     content,
@@ -243,7 +228,6 @@ app.post("/posts", ensureAuthenticated, upload.single("image"), async (req, res)
   res.redirect("/posts");
 });
 
-// Show single post
 app.get("/posts/:id", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
   let post = posts.find((p) => id === p.id);
@@ -255,29 +239,27 @@ app.get("/posts/:id/edit", ensureAuthenticated, (req, res) => {
   let post = posts.find((p) => id === p.id);
   const currentUser = getCurrentUser(req);
 
-  // Authorization check (Server-side)
+  // Server-side Authorization check: ONLY AUTHOR CAN EDIT
   const isAuthor = currentUser && post.authorId && (currentUser.id === post.authorId);
-  const isAdmin = currentUser && currentUser.isAdmin;
   
-  if (!isAuthor && !isAdmin) {
+  if (!isAuthor) {
     return res.status(403).send("Error 403: Forbidden - You can only edit your own posts.");
   }
   
   res.render("edit.ejs", { post });
 });
 
-// PATCH ROUTE 
+// PATCH ROUTE (Update post)
 app.patch("/posts/:id", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
   let { content, rating, itemName } = req.body; 
   let post = posts.find((p) => id === p.id);
   const currentUser = getCurrentUser(req);
 
-  // Authorization check (Server-side)
+  // Server-side Authorization check: ONLY AUTHOR CAN UPDATE
   const isAuthor = currentUser && post.authorId && (currentUser.id === post.authorId);
-  const isAdmin = currentUser && currentUser.isAdmin;
 
-  if (!post || (!isAuthor && !isAdmin)) {
+  if (!post || !isAuthor) {
     return res.status(403).send("Error 403: Forbidden - Cannot update this post.");
   }
 
@@ -289,16 +271,16 @@ app.patch("/posts/:id", ensureAuthenticated, (req, res) => {
   res.redirect("/posts");
 });
 
+// DELETE ROUTE
 app.delete("/posts/:id", ensureAuthenticated, (req, res) => {
   let { id } = req.params;
   let postToDelete = posts.find((p) => id === p.id);
   const currentUser = getCurrentUser(req);
 
-  // Authorization check (Server-side)
+  // Server-side Authorization check: ONLY AUTHOR CAN DELETE
   const isAuthor = currentUser && postToDelete.authorId && (currentUser.id === postToDelete.authorId);
-  const isAdmin = currentUser && currentUser.isAdmin;
 
-  if (!postToDelete || (!isAuthor && !isAdmin)) {
+  if (!postToDelete || !isAuthor) {
     return res.status(403).send("Error 403: Forbidden - Cannot delete this post.");
   }
   

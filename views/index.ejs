@@ -55,10 +55,9 @@
             <% 
               // Check if post.authorId exists AND if it matches the current user's ID
               const isAuthor = currentUser && post.authorId && (currentUser.id === post.authorId);
-              const isAdmin = currentUser && currentUser.isAdmin;
             %>
             
-            <% if (isAuthor || isAdmin) { %>
+            <% if (isAuthor) { %>
               <a href="/posts/<%= post.id %>/edit" class="btn-edit">Edit</a>
 
               <form method="POST" action="/posts/<%= post.id %>?_method=DELETE" class="delete-form">
