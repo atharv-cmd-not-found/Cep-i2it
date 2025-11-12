@@ -21,12 +21,18 @@ const { put, head } = require("@vercel/blob");
 // --- PERSISTENCE CONFIGURATION ---
 const POSTS_BLOB_PATH = 'posts.json';
 const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
+// NEW CHECK: Boolean flag for whether persistence is possible
+const PERSISTENCE_ENABLED = !!BLOB_READ_WRITE_TOKEN;
 
 // Dummy data structure placeholder
 let posts = [];
 
 // Function to load posts from Vercel Blob
 async function loadPosts() {
+    if (!PERSISTENCE_ENABLED) {
+        console.warn("[Persistence] Blob token missing. Skipping load from remote storage.");
+        return [];
+    }
     try {
         // 1. Check if the file exists using head()
         const headResponse = await head(POSTS_BLOB_PATH, { token: BLOB_READ_WRITE_TOKEN });
@@ -47,7 +53,7 @@ async function loadPosts() {
         }));
 
     } catch (error) {
-        console.warn(`[Persistence] posts.json not found or failed to load. Initializing with empty array.`);
+        console.warn(`[Persistence] posts.json not found or failed to load. Initializing with empty array. Error: ${error.message}`);
         // Return an empty array on failure or 404
         return [];
     }
@@ -55,6 +61,10 @@ async function loadPosts() {
 
 // Function to save posts to Vercel Blob
 async function savePosts() {
+    if (!PERSISTENCE_ENABLED) {
+        console.warn("[Persistence] Blob token missing. Skipping save to remote storage.");
+        return;
+    }
     try {
         const postsJson = JSON.stringify(posts);
         await put(POSTS_BLOB_PATH, postsJson, { 
@@ -69,13 +79,13 @@ async function savePosts() {
 
 
 // --- ASYNC INITIALIZATION WRAPPER ---
-// We wrap the entire app setup in an async function to load data before starting routes
 async function initializeApp() {
     posts = await loadPosts();
     if (posts.length === 0) {
-        // Initialize with default data if storage is empty
+        // Initialize with default data if storage is empty or persistence failed
         console.log("[Persistence] Populating with initial dummy data.");
          // ------------------- DUMMY DATA ------------------- //
+        const ADMIN_USERNAME = "admin";
         posts = [
             {
                 id: uuidv4(),
@@ -90,7 +100,6 @@ async function initializeApp() {
             },
             {
                 id: uuidv4(),
-                // Use a consistent ID for the sample Google user (SteveRogers)
                 authorId: 'FIXED_GOOGLE_USER_ID_12345', 
                 username: "SteveRogers",
                 itemName: "Upma", 
@@ -101,10 +110,14 @@ async function initializeApp() {
                 updatedAt: new Date(),
             },
         ];
-        // Save the initial dummy data to Blob so it's there next time
-        await savePosts(); 
+        // Only save initial data if persistence is enabled
+        if (PERSISTENCE_ENABLED) {
+             await savePosts(); 
+        }
     }
     
+    // ... (rest of the Passport setup, Middleware, and Routes remain the same) ...
+
     // --- PASSPORT SETUP ---
     const users = [];
 
@@ -114,14 +127,10 @@ async function initializeApp() {
         callbackURL: `${HOST}/auth/google/callback` 
       },
       function(accessToken, refreshToken, profile, cb) {
-        // FIX: The key here is using the unchangeable Google ID for persistence
         let user = users.find(u => u.googleId === profile.id);
         if (!user) {
-          // In a real database, you would check if the profile.id exists in a users table
-          // Since we are using in-memory 'users' array, we re-create it but the
-          // authorId check in the posts logic uses the profile.id as the unique identifier.
           user = { 
-            id: profile.id, // Store Google ID directly as primary ID for persistence
+            id: profile.id, 
             googleId: profile.id,
             displayName: profile.displayName,
             username: profile.displayName.replace(/\s/g, '').toLowerCase() + '_google',
@@ -138,15 +147,13 @@ async function initializeApp() {
     });
 
     passport.deserializeUser((id, done) => {
-        // FIX: Admin is identified by a special string, others by their Google ID
-        if (id === ADMIN_USERNAME) { // If the ID is the hardcoded Admin username (which is set during admin login)
+        if (id === ADMIN_USERNAME) { 
              return done(null, { 
-                id: 'ADMIN_SESSION_ID', // Consistent Admin ID
+                id: 'ADMIN_SESSION_ID', 
                 username: ADMIN_USERNAME,
                 isAdmin: true 
             });
         }
-        // For Google users, find by their ID (which is their Google ID)
         const user = users.find(u => u.id === id);
         done(null, user);
     });
@@ -173,7 +180,6 @@ async function initializeApp() {
 
     // Utility function to get the current user's ID/info
     function getCurrentUser(req) {
-        // FIX: req.session.isAdmin check relies on the passport session which now uses profile.id
         if (req.user && req.user.isAdmin) { 
             return req.user;
         }
@@ -185,13 +191,10 @@ async function initializeApp() {
 
     // Authentication Check Middleware
     function ensureAuthenticated(req, res, next) {
-        // req.isAuthenticated() covers both Passport and our custom session check
         if (req.isAuthenticated()) { 
             return next(); 
         }
-        // Custom check for the initial Admin login, which doesn't use Passport serialize
         if (req.session.isAdmin) {
-             // If they are admin, create a temporary user object for the request duration
              req.user = { 
                 id: 'ADMIN_SESSION_ID', 
                 username: ADMIN_USERNAME,
@@ -224,7 +227,6 @@ async function initializeApp() {
       const { username, password } = req.body;
 
       if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        // Use a simple session flag for admin
         req.session.isAdmin = true; 
         res.redirect("/posts");
       } else {
@@ -234,8 +236,6 @@ async function initializeApp() {
     });
 
     // --- GOOGLE AUTH ROUTES ---
-    // ... (rest of the auth routes remain the same) ...
-
     app.get('/auth/google',
       passport.authenticate('google', { scope: ['profile', 'email'] }));
 
@@ -297,12 +297,11 @@ async function initializeApp() {
       }
       
       const currentUser = getCurrentUser(req);
-      // Admin username comes from the form, Google user username comes from their display name
       let postUsername = currentUser.isAdmin ? username : currentUser.displayName; 
 
       let newPost = {
         id,
-        authorId: currentUser.id, // This is the consistent ID (Admin ID or Google ID)
+        authorId: currentUser.id, 
         username: postUsername,
         itemName,
         content,
