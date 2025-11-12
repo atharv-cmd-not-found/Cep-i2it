@@ -1,1 +1,14 @@
+
+
+### Recommended `.gitignore` Entries:
+
+# Dependencies
+/node_modules
+
+# Environment Variables
+.env
 .env.local
+.env.*
+
+# Uploaded Files
+/uploads
