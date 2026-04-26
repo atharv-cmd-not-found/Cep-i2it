@@ -7,7 +7,10 @@ const pool = mysql.createPool({
     database: process.env.DB_NAME,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    ssl: {
+        rejectUnauthorized: true
+    }
 });
 
 console.log("DB Pool initialized for host:", process.env.DB_HOST || 'localhost');
