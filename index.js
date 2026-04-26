@@ -3,12 +3,12 @@ const app = express();
 // Load environment variables from .env.local
 require('dotenv').config({ path: './.env.local' }); 
 
-let port = 3000;
+let port = process.env.PORT || 3000;
 const path = require("path");
 const methodOverride = require("method-override");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
-// const fetch = require('node-fetch'); // <--- REMOVED: Sync require is the source of the ERR_REQUIRE_ESM error
+const mysql = require('mysql2/promise');
 
 // Passport Authentication Imports
 const session = require('express-session');
@@ -16,147 +16,72 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 
 // 1. IMPORT VERCEL BLOB SDK
-const { put, head } = require("@vercel/blob");
+const { put } = require("@vercel/blob");
 
-// --- PERSISTENCE CONFIGURATION ---
-const POSTS_BLOB_PATH = 'posts.json';
+// --- DATABASE CONFIGURATION ---
+const pool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'cep_db',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
+
+// 2. CONFIGURE MULTER FOR IN-MEMORY STORAGE
+const upload = multer({ storage: multer.memoryStorage() });
 const BLOB_READ_WRITE_TOKEN = process.env.BLOB_READ_WRITE_TOKEN;
-const PERSISTENCE_ENABLED = !!BLOB_READ_WRITE_TOKEN;
-
-// Dummy data structure placeholder - MUST be initialized synchronously
-let posts = [];
-let isDataLoaded = false; // Flag to track if the data has been loaded from Blob
-
-// Function to get the initial dummy data set
-function getDummyPosts() {
-     return [
-        {
-            id: uuidv4(),
-            authorId: 'ADMIN_SESSION_ID', 
-            username: "tonystark",
-            itemName: "Coffee", 
-            content: "I found a fly in my poha",
-            image: null,
-            rating: 1,
-            createdAt: new Date(Date.now() - 86400000), 
-            updatedAt: new Date(Date.now() - 86400000),
-        },
-        {
-            id: uuidv4(),
-            authorId: 'FIXED_GOOGLE_USER_ID_12345', 
-            username: "SteveRogers",
-            itemName: "Upma", 
-            content: "My Poha in the morning was so spicy ",
-            image: null,
-            rating: 3,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        },
-    ];
-}
-
-
-// Function to load posts from Vercel Blob (Called inside routes now)
-async function loadPosts() {
-    // FIX: Dynamically import node-fetch here
-    const { default: fetch } = await import('node-fetch');
-
-    if (!PERSISTENCE_ENABLED) {
-        // Return dummy data if persistence is off/failed
-        console.warn("[Persistence] Blob token missing. Skipping load from remote storage.");
-        return getDummyPosts();
-    }
-    
-    try {
-        const headResponse = await head(POSTS_BLOB_PATH, { token: BLOB_READ_WRITE_TOKEN });
-        const blobUrl = headResponse.url;
-
-        const response = await fetch(blobUrl);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch posts. Status: ${response.status}`);
-        }
-        const data = await response.json();
-        
-        return data.map(post => ({
-            ...post,
-            createdAt: new Date(post.createdAt),
-            updatedAt: new Date(post.updatedAt)
-        }));
-
-    } catch (error) {
-        console.warn(`[Persistence] posts.json not found or failed to load. Using dummy data. Error: ${error.message}`);
-        // If fetch fails, return initial dummy data
-        return getDummyPosts();
-    }
-}
-
-// Function to save posts to Vercel Blob
-async function savePosts() {
-    // FIX: Dynamically import fetch here (even though it's not used directly with Blob put/head, keeping it here for consistency if network is needed)
-    const { default: fetch } = await import('node-fetch');
-    
-    if (!PERSISTENCE_ENABLED) {
-        console.warn("[Persistence] Blob token missing. Skipping save to remote storage.");
-        return;
-    }
-    try {
-        const postsJson = JSON.stringify(posts);
-        await put(POSTS_BLOB_PATH, postsJson, { 
-            access: 'public', 
-            contentType: 'application/json',
-            token: BLOB_READ_WRITE_TOKEN
-        });
-    } catch (error) {
-        console.error("[Persistence] Error saving posts to Blob:", error);
-    }
-}
-
-// **SYNCHRONOUS INITIALIZATION**
-posts = getDummyPosts(); // Initialize with dummy data immediately to avoid crashes
-
 
 // --- PASSPORT SETUP ---
-const users = [];
-
 const ADMIN_USERNAME = "admin";
 const DEPLOYED_URL = "https://cep-i2it.vercel.app";
-const HOST = process.env.NODE_ENV === 'production' ? DEPLOYED_URL : "http://localhost:3000";
+const HOST = process.env.NODE_ENV === 'production' ? DEPLOYED_URL : `http://localhost:${port}`;
 
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: `${HOST}/auth/google/callback` 
   },
-  function(accessToken, refreshToken, profile, cb) {
-    let user = users.find(u => u.googleId === profile.id);
-    if (!user) {
-      user = { 
-        id: profile.id, 
-        googleId: profile.id,
-        displayName: profile.displayName,
-        username: profile.displayName.replace(/\s/g, '').toLowerCase() + '_google',
-        isGoogle: true
-      };
-      users.push(user);
+  async function(accessToken, refreshToken, profile, cb) {
+    try {
+        const [rows] = await pool.execute('SELECT * FROM users WHERE google_id = ?', [profile.id]);
+        let user = rows[0];
+
+        if (!user) {
+            const username = profile.displayName.replace(/\s/g, '').toLowerCase() + '_google';
+            const [result] = await pool.execute(
+                'INSERT INTO users (username, display_name, google_id) VALUES (?, ?, ?)',
+                [username, profile.displayName, profile.id]
+            );
+            const [newUserRows] = await pool.execute('SELECT * FROM users WHERE user_id = ?', [result.insertId]);
+            user = newUserRows[0];
+        }
+        return cb(null, user);
+    } catch (err) {
+        return cb(err);
     }
-    return cb(null, user);
   }
 ));
 
 passport.serializeUser((user, done) => {
-    done(null, user.id);
+    done(null, user.user_id || user.id);
 });
 
-passport.deserializeUser((id, done) => {
+passport.deserializeUser(async (id, done) => {
     if (id === ADMIN_USERNAME) { 
          return done(null, { 
-            id: 'ADMIN_SESSION_ID', 
+            user_id: 'ADMIN', 
             username: ADMIN_USERNAME,
             isAdmin: true 
         });
     }
-    const user = users.find(u => u.id === id);
-    done(null, user);
+    try {
+        const [rows] = await pool.execute('SELECT * FROM users WHERE user_id = ?', [id]);
+        done(null, rows[0]);
+    } catch (err) {
+        done(err);
+    }
 });
 
 
@@ -170,7 +95,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // Configure Session Middleware
 app.use(session({
-    secret: process.env.SESSION_SECRET,
+    secret: process.env.SESSION_SECRET || 'fallback_secret',
     resave: false,
     saveUninitialized: false
 }));
@@ -179,17 +104,6 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Utility function to get the current user's ID/info
-function getCurrentUser(req) {
-    if (req.user && req.user.isAdmin) { 
-        return req.user;
-    }
-    if (req.user && req.user.id) {
-        return req.user;
-    }
-    return null; 
-}
-
 // Authentication Check Middleware
 function ensureAuthenticated(req, res, next) {
     if (req.isAuthenticated()) { 
@@ -197,7 +111,7 @@ function ensureAuthenticated(req, res, next) {
     }
     if (req.session.isAdmin) {
          req.user = { 
-            id: 'ADMIN_SESSION_ID', 
+            user_id: 'ADMIN', 
             username: ADMIN_USERNAME,
             isAdmin: true 
         };
@@ -206,9 +120,6 @@ function ensureAuthenticated(req, res, next) {
     res.redirect('/login');
 }
 
-
-// 2. CONFIGURE MULTER FOR IN-MEMORY STORAGE
-const upload = multer({ storage: multer.memoryStorage() });
 
 // ------------------- LOGIN PART ------------------- //
 const ADMIN_PASSWORD = "12345";
@@ -259,25 +170,35 @@ app.get('/logout', (req, res) => {
 // ------------------- POSTS PART (Secured) ------------------- //
 
 app.get("/posts", ensureAuthenticated, async (req, res) => { 
-  // Asynchronously load data on the first request for the life of this serverless instance
-  if (!isDataLoaded) {
-      posts = await loadPosts();
-      isDataLoaded = true;
+  try {
+      const [rows] = await pool.execute(`
+          SELECT r.*, u.username as author_username, u.display_name, i.item_name 
+          FROM reviews r
+          JOIN users u ON r.user_id = u.user_id
+          JOIN items i ON r.item_id = i.item_id
+          ORDER BY r.created_at DESC
+      `);
+
+      // Map DB names to EJS expected names if necessary
+      const formattedPosts = rows.map(post => ({
+          id: post.review_id,
+          username: post.display_name || post.author_username,
+          itemName: post.item_name,
+          content: post.content,
+          rating: post.rating,
+          image: post.image_url,
+          createdAt: post.created_at,
+          authorId: post.user_id
+      }));
+
+      res.render("index.ejs", { 
+          posts: formattedPosts,
+          currentUser: req.user
+      });
+  } catch (error) {
+      console.error("Error fetching posts:", error);
+      res.status(500).send("Internal Server Error");
   }
-
-  const currentUser = getCurrentUser(req);
-  
-  const sortedPosts = posts.sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      
-      return dateB - dateA;
-  });
-
-  res.render("index.ejs", { 
-      posts: sortedPosts,
-      currentUser
-  });
 });
 
 app.get("/posts/new", ensureAuthenticated, (req, res) => {
@@ -285,8 +206,7 @@ app.get("/posts/new", ensureAuthenticated, (req, res) => {
 });
 
 app.post("/posts", ensureAuthenticated, upload.single("image"), async (req, res) => {
-  let { username, content, rating, itemName } = req.body; 
-  let id = uuidv4();
+  let { content, rating, itemName } = req.body; 
   let imageUrl = null; 
 
   if (req.file) {
@@ -302,142 +222,197 @@ app.post("/posts", ensureAuthenticated, upload.single("image"), async (req, res)
     }
   }
   
-  const currentUser = getCurrentUser(req);
-  let postUsername = currentUser.isAdmin ? username : currentUser.displayName; 
+  try {
+      // 1. Get or Create Item
+      let [itemRows] = await pool.execute('SELECT item_id FROM items WHERE item_name = ?', [itemName]);
+      let itemId;
+      if (itemRows.length === 0) {
+          const [result] = await pool.execute('INSERT INTO items (item_name) VALUES (?)', [itemName]);
+          itemId = result.insertId;
+      } else {
+          itemId = itemRows[0].item_id;
+      }
 
-  let newPost = {
-    id,
-    authorId: currentUser.id, 
-    username: postUsername,
-    itemName,
-    content,
-    image: imageUrl, 
-    rating: Number(rating),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+      // 2. Insert Review
+      const userId = req.user.user_id;
+      // Handle Admin posting (if allowed, currently Admin uses 'ADMIN' ID which won't work in DB if FK is INT)
+      // For this project, we'll assume Admin is mapped to a real user record if they post.
+      // If req.user.user_id is 'ADMIN', we should probably have a fallback or a specific Admin user in DB.
+      let dbUserId = userId === 'ADMIN' ? 1 : userId; 
 
-  posts.push(newPost);
-  await savePosts(); // SAVE AFTER CREATING
-  res.redirect("/posts");
-});
+      await pool.execute(
+          'INSERT INTO reviews (user_id, item_id, content, rating, image_url) VALUES (?, ?, ?, ?, ?)',
+          [dbUserId, itemId, content, Number(rating), imageUrl]
+      );
 
-app.get("/posts/:id", ensureAuthenticated, (req, res) => {
-  let { id } = req.params;
-  let post = posts.find((p) => id === p.id);
-  res.render("singlepost.ejs", { post });
-});
-
-app.get("/posts/:id/edit", ensureAuthenticated, (req, res) => {
-  let { id } = req.params;
-  let post = posts.find((p) => id === p.id);
-  const currentUser = getCurrentUser(req);
-
-  const isAuthor = currentUser && post.authorId && (currentUser.id === post.authorId);
-  
-  if (!isAuthor) {
-    return res.status(403).send("Error 403: Forbidden - You can only edit your own posts.");
+      res.redirect("/posts");
+  } catch (error) {
+      console.error("Error creating post:", error);
+      res.status(500).send("Error creating post");
   }
-  
-  res.render("edit.ejs", { post });
+});
+
+app.get("/posts/:id", ensureAuthenticated, async (req, res) => {
+  let { id } = req.params;
+  try {
+      const [rows] = await pool.execute(`
+          SELECT r.*, u.username as author_username, u.display_name, i.item_name 
+          FROM reviews r
+          JOIN users u ON r.user_id = u.user_id
+          JOIN items i ON r.item_id = i.item_id
+          WHERE r.review_id = ?
+      `, [id]);
+      
+      if (rows.length === 0) return res.status(404).send("Post not found");
+
+      const post = {
+          id: rows[0].review_id,
+          username: rows[0].display_name || rows[0].author_username,
+          itemName: rows[0].item_name,
+          content: rows[0].content,
+          rating: rows[0].rating,
+          image: rows[0].image_url,
+          createdAt: rows[0].created_at
+      };
+
+      res.render("singlepost.ejs", { post });
+  } catch (error) {
+      res.status(500).send("Error fetching post");
+  }
+});
+
+app.get("/posts/:id/edit", ensureAuthenticated, async (req, res) => {
+  let { id } = req.params;
+  try {
+      const [rows] = await pool.execute('SELECT * FROM reviews WHERE review_id = ?', [id]);
+      if (rows.length === 0) return res.status(404).send("Post not found");
+      
+      const post = rows[0];
+      const isAuthor = req.user && (req.user.user_id === post.user_id || req.user.isAdmin);
+      
+      if (!isAuthor) {
+          return res.status(403).send("Forbidden - You can only edit your own posts.");
+      }
+
+      // Fetch item name for the form
+      const [itemRows] = await pool.execute('SELECT item_name FROM items WHERE item_id = ?', [post.item_id]);
+      post.itemName = itemRows[0].item_name;
+      post.id = post.review_id; // For EJS compatibility
+
+      res.render("edit.ejs", { post });
+  } catch (error) {
+      res.status(500).send("Error");
+  }
 });
 
 app.patch("/posts/:id", ensureAuthenticated, async (req, res) => {
   let { id } = req.params;
   let { content, rating, itemName } = req.body; 
-  let post = posts.find((p) => id === p.id);
-  const currentUser = getCurrentUser(req);
 
-  const isAuthor = currentUser && post.authorId && (currentUser.id === post.authorId);
+  try {
+      const [rows] = await pool.execute('SELECT * FROM reviews WHERE review_id = ?', [id]);
+      if (rows.length === 0) return res.status(404).send("Post not found");
+      
+      const post = rows[0];
+      const isAuthor = req.user && (req.user.user_id === post.user_id || req.user.isAdmin);
 
-  if (!post || !isAuthor) {
-    return res.status(403).send("Error 403: Forbidden - Cannot update this post.");
+      if (!isAuthor) {
+          return res.status(403).send("Forbidden");
+      }
+
+      // 1. Get or Create Item
+      let [itemRows] = await pool.execute('SELECT item_id FROM items WHERE item_name = ?', [itemName]);
+      let itemId;
+      if (itemRows.length === 0) {
+          const [result] = await pool.execute('INSERT INTO items (item_name) VALUES (?)', [itemName]);
+          itemId = result.insertId;
+      } else {
+          itemId = itemRows[0].item_id;
+      }
+
+      await pool.execute(
+          'UPDATE reviews SET content = ?, rating = ?, item_id = ?, updated_at = NOW() WHERE review_id = ?',
+          [content, Number(rating), itemId, id]
+      );
+
+      res.redirect("/posts");
+  } catch (error) {
+      res.status(500).send("Error updating post");
   }
-
-  post.itemName = itemName; 
-  post.content = content;
-  post.rating = Number(rating);
-  post.updatedAt = new Date(); 
-
-  await savePosts(); // SAVE AFTER UPDATING
-  res.redirect("/posts");
 });
 
 app.delete("/posts/:id", ensureAuthenticated, async (req, res) => {
   let { id } = req.params;
-  let postToDelete = posts.find((p) => id === p.id);
-  const currentUser = getCurrentUser(req);
+  try {
+      const [rows] = await pool.execute('SELECT * FROM reviews WHERE review_id = ?', [id]);
+      if (rows.length === 0) return res.status(404).send("Post not found");
+      
+      const post = rows[0];
+      const isAuthor = req.user && (req.user.user_id === post.user_id || req.user.isAdmin);
 
-  const isAuthor = currentUser && postToDelete.authorId && (currentUser.id === postToDelete.authorId);
-
-  if (!postToDelete || !isAuthor) {
-    return res.status(403).send("Error 403: Forbidden - Cannot delete this post.");
+      if (!isAuthor) {
+          return res.status(403).send("Forbidden");
+      }
+      
+      await pool.execute('DELETE FROM reviews WHERE review_id = ?', [id]);
+      res.redirect("/posts");
+  } catch (error) {
+      res.status(500).send("Error deleting post");
   }
-  
-  posts = posts.filter((p) => p.id !== id);
-  await savePosts(); // SAVE AFTER DELETING
-  res.redirect("/posts");
 });
 
 // ------------------- ANALYTICS PART (Secured) ------------------- //
-app.get("/ana", ensureAuthenticated, (req, res) => {
-  let today = new Date();
-  today.setHours(0, 0, 0, 0);
+app.get("/ana", ensureAuthenticated, async (req, res) => {
+  try {
+      // 1. Today's Posts Count
+      const [countRows] = await pool.execute('SELECT COUNT(*) as count FROM reviews WHERE DATE(created_at) = CURDATE()');
+      const todaysCount = countRows[0].count;
 
-  let todaysPosts = posts.filter((post) => {
-    let postDate = new Date(post.createdAt);
-    postDate.setHours(0, 0, 0, 0);
-    return postDate.getTime() === today.getTime();
-  });
+      // 2. Average Rating (Today)
+      const [avgRows] = await pool.execute('SELECT AVG(rating) as avg FROM reviews WHERE DATE(created_at) = CURDATE()');
+      const averageRating = avgRows[0].avg ? Number(avgRows[0].avg).toFixed(2) : 0;
 
-  let ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  let totalRating = 0;
+      // 3. Ratings Breakdown (Today)
+      const [breakdownRows] = await pool.execute(`
+          SELECT rating, COUNT(*) as count 
+          FROM reviews 
+          WHERE DATE(created_at) = CURDATE() 
+          GROUP BY rating
+      `);
+      const ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+      breakdownRows.forEach(row => {
+          ratingCounts[row.rating] = row.count;
+      });
 
-  todaysPosts.forEach((post) => {
-    if (post.rating) {
-      ratingCounts[post.rating] = (ratingCounts[post.rating] || 0) + 1;
-      totalRating += post.rating;
-    }
-  });
-
-  let averageRating =
-    todaysPosts.length > 0
-      ? (totalRating / todaysPosts.length).toFixed(2)
-      : 0;
-  
-  const itemRatings = {}; 
-
-  posts.forEach(post => {
-      const name = post.itemName || 'Unknown Item';
-      const rating = post.rating || 0;
-
-      if (!itemRatings[name]) {
-          itemRatings[name] = { sum: 0, count: 0 };
+      // 4. Highest Rated Item (All Time)
+      const [bestItemRows] = await pool.execute(`
+          SELECT i.item_name, AVG(r.rating) as avg, COUNT(r.review_id) as count
+          FROM reviews r
+          JOIN items i ON r.item_id = i.item_id
+          GROUP BY i.item_id
+          ORDER BY avg DESC, count DESC
+          LIMIT 1
+      `);
+      
+      let bestItem = { name: "N/A", avg: 0, count: 0 };
+      if (bestItemRows.length > 0) {
+          bestItem = {
+              name: bestItemRows[0].item_name,
+              avg: Number(bestItemRows[0].avg),
+              count: bestItemRows[0].count
+          };
       }
 
-      itemRatings[name].sum += rating;
-      itemRatings[name].count += 1;
-  });
-
-  let bestItem = { name: "N/A", avg: 0, count: 0 };
-
-  for (const name in itemRatings) {
-      const data = itemRatings[name];
-      const avg = data.sum / data.count;
-
-      if (avg > bestItem.avg && data.count > 0) {
-          bestItem.name = name;
-          bestItem.avg = avg;
-          bestItem.count = data.count;
-      }
+      res.render("ana.ejs", { 
+          todaysPosts: { length: todaysCount }, // EJS expects .length
+          ratingCounts, 
+          averageRating,
+          bestItem 
+      });
+  } catch (error) {
+      console.error("Analytics Error:", error);
+      res.status(500).send("Error loading analytics");
   }
-
-  res.render("ana.ejs", { 
-      todaysPosts, 
-      ratingCounts, 
-      averageRating,
-      bestItem 
-  });
 });
 
 
@@ -452,6 +427,6 @@ module.exports = app;
 // Keep app.listen() for local testing only
 if (process.env.NODE_ENV !== 'production') {
     app.listen(port, () => {
-        console.log("listening on port 3000");
+        console.log(`listening on port ${port}`);
     });
-}
+}
