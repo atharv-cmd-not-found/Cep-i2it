@@ -16,6 +16,7 @@ module.exports = function(passport, host) {
     
             if (!user) {
                 const username = profile.displayName.replace(/\s/g, '').toLowerCase() + '_google';
+                console.log(`Inserting new user: ${profile.displayName} (Google ID: ${profile.id})`);
                 const [result] = await pool.execute(
                     'INSERT INTO users (username, display_name, google_id) VALUES (?, ?, ?)',
                     [username, profile.displayName, profile.id]
